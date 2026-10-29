@@ -1,5 +1,6 @@
 package com.auranite.keepersofthestonesthree.keepersofthestonesiii;
 
+import com.auranite.keepersofthestonesthree.keepersofthestonesiii.effect.Kots3Effects;
 import com.auranite.keepersofthestonesthree.keepersofthestonesiii.item.Kots3Items;
 import com.auranite.keepersofthestonesthree.keepersofthestonesiii.item.Kots3Tabs;
 import net.neoforged.fml.ModContainer;
@@ -41,6 +42,7 @@ public class KeepersOfTheStonesIIIMod {
         // Register mod items and tabs
         Kots3Items.REGISTRY.register(modEventBus);
         Kots3Tabs.REGISTRY.register(modEventBus);
+        Kots3Effects.REGISTRY.register(modEventBus);
     }
 
 
