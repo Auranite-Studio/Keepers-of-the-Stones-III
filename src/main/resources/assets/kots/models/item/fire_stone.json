@@ -1,0 +1,14 @@
+{
+  "parent": "item/generated",
+  "textures": {
+    "layer0": "kots:item/fire_stone"
+  },
+  "overrides": [
+    {
+      "predicate": {
+        "kots:fire_stone_recharge": 0.01
+      },
+      "model": "kots:item/fire_stone_0"
+    }
+  ]
+}

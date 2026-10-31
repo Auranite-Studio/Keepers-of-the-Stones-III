@@ -1,0 +1,38 @@
+plugins {
+    id 'eclipse'
+    id 'net.neoforged.moddev' version '2.0.107'
+}
+
+version = '1.0.0-beta.1+1.21.1-neoforge'
+base.archivesName = "modid"
+
+java.toolchain.languageVersion = JavaLanguageVersion.of(21)
+
+neoForge {
+    version = "21.1.215"
+
+    runs {
+        client {
+            client()
+
+        }
+        server {
+            server()
+        }
+
+        configureEach {
+            systemProperty 'forge.logging.markers', 'REGISTRIES'
+            logLevel = org.slf4j.event.Level.DEBUG
+        }
+    }
+
+    mods {
+        mcreator {
+            sourceSet sourceSets.main
+        }
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8' // Use the UTF-8 charset for Java compilation
+}

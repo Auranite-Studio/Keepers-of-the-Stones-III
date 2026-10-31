@@ -1,0 +1,37 @@
+# NeoForge mods.toml for Keepers of the Stones III
+modLoader="javafml"
+loaderVersion="[4,)"
+license="GPL-3.0"
+
+[[mods]]
+modId="kots"
+version="1.0.0-beta.1+1.21.1-neoforge"
+displayName="Keepers of the Stones III"
+authors="Auranite"
+displayURL="https://www.curseforge.com/members/auranite/projects"
+logoFile="kots.png"
+credits=""
+description='''A mod adding elemental stones and runes.'''
+
+# The [[mixins]] block allows you to declare your mixin config to FML so that it gets loaded.
+#[[mixins]]
+#config="kots.mixins.json"
+
+# The [[accessTransformers]] block allows you to declare where your AT file is.
+#[[accessTransformers]]
+#file="META-INF/accesstransformer.cfg"
+
+# A dependency - use the . to indicate dependency for a specific modid.
+[[dependencies.kots]]
+modId="neoforge"
+type="required"
+versionRange="[21.1.215,)"
+ordering="NONE"
+side="BOTH"
+
+[[dependencies.kots]]
+modId="minecraft"
+type="required"
+versionRange="[1.21.1,1.22)"
+ordering="NONE"
+side="BOTH"

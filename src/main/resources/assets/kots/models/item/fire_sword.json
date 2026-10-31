@@ -1,0 +1,7 @@
+{
+  "parent": "kots:custom/fire_sword",
+  "textures": {
+    "0": "kots:block/fire_sword",
+    "particle": "kots:item/fire_sword"
+  }
+}
