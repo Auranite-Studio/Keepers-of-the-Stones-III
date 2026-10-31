@@ -1,14 +1,13 @@
 package com.auranite.keepersofthestonesthree.keepersofthestonesiii.client;
 
 import com.auranite.keepersofthestonesthree.keepersofthestonesiii.network.DeactivateStoneC2SPacket;
+import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.KeyMapping;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
-import net.neoforged.neoforge.client.settings.KeyConflictContext;
-import net.neoforged.neoforge.client.settings.KeyModifier;
 import net.neoforged.neoforge.network.PacketDistributor;
 import org.lwjgl.glfw.GLFW;
 
@@ -21,12 +20,11 @@ public final class Kots3Client {
 
     public static final KeyMapping DEACTIVATE_STONE_KEY = new KeyMapping(
             "key.kots.deactivate_stone",   // translation key
-            KeyConflictContext.IN_GAME,
-            KeyModifier.NONE,
+            InputConstants.KEY,
             GLFW.GLFW_KEY_U,
             "key.categories.kots");        // translation key for the category
 
-    @EventBusSubscriber(value = Dist.CLIENT, modid = "kots", bus = EventBusSubscriber.Bus.MOD)
+    @EventBusSubscriber(value = Dist.CLIENT, modid = "kots")
     public static class ModBusEvents {
         @SubscribeEvent
         public static void registerKeys(RegisterKeyMappingsEvent event) {
@@ -34,7 +32,7 @@ public final class Kots3Client {
         }
     }
 
-    @EventBusSubscriber(value = Dist.CLIENT, modid = "kots", bus = EventBusSubscriber.Bus.GAME)
+    @EventBusSubscriber(value = Dist.CLIENT, modid = "kots")
     public static class GameBusEvents {
         @SubscribeEvent
         public static void onClientTick(ClientTickEvent.Post event) {

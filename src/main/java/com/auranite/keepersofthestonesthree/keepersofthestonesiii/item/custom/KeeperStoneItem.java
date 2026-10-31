@@ -58,14 +58,14 @@ public class KeeperStoneItem extends Item {
     public static void activate(Level level, Player player, ItemStack stack) {
         stack.set(Kots3DataComponents.STONE_ACTIVE.get(), Boolean.TRUE);
         stack.remove(Kots3DataComponents.STONE_RECHARGE_UNTIL.get());
-        player.addEffect(new MobEffectInstance(Kots3Effects.FIRE_MASTER.get(), MASTER_DURATION_TICKS, 0, false, true, true));
+        player.addEffect(new MobEffectInstance(Kots3Effects.fireMaster(), MASTER_DURATION_TICKS, 0, false, true, true));
     }
 
     /** Deactivates the stone (U key or right-click) and starts the recharge phase. */
     public static void deactivate(Level level, Player player, ItemStack stack) {
         stack.remove(Kots3DataComponents.STONE_ACTIVE.get());
         startRecharge(stack, level.getGameTime());
-        player.removeEffect(Kots3Effects.FIRE_MASTER.get());
+        player.removeEffect(Kots3Effects.fireMaster());
     }
 
     /** Puts the stone into its recharge cooldown. */

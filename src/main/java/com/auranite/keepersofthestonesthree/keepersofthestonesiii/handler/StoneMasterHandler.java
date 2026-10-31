@@ -1,6 +1,7 @@
 package com.auranite.keepersofthestonesthree.keepersofthestonesiii.handler;
 
 import com.auranite.keepersofthestonesthree.keepersofthestonesiii.component.Kots3DataComponents;
+import com.auranite.keepersofthestonesthree.keepersofthestonesiii.effect.FireArmorItem;
 import com.auranite.keepersofthestonesthree.keepersofthestonesiii.effect.Kots3Effects;
 import com.auranite.keepersofthestonesthree.keepersofthestonesiii.item.Kots3Items;
 import com.auranite.keepersofthestonesthree.keepersofthestonesiii.item.custom.KeeperStoneItem;
@@ -12,19 +13,17 @@ import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.inventory.AbstractContainerMenu;
-import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ArmorItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.entity.living.LivingDropsEvent;
-import net.neoforged.neoforge.event.entity.player.PlayerContainerEvent;
-import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.event.tick.PlayerTickEvent;
 
-import java.util.List;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.WeakHashMap;
 
 /**
  * Server-side logic of the "Keeper Master" mechanic:
@@ -38,6 +37,12 @@ import java.util.List;
  */
 @EventBusSubscriber(modid = "kots")
 public class StoneMasterHandler {
+
+    /**
+     * Remembered positions of the locked stacks per player:
+     * identity hash of the ItemStack -> inventory slot index (see {@link #enforceLockedSlots}).
+     */
+    private static final Map<ServerPlayer, Map<Integer, Integer>> LOCKED_POSITIONS = new WeakHashMap<>();
 
     /** Deactivates every active stone the player carries (triggered by the U key packet). */
     public static void deactivateAllStones(Player player) {
@@ -54,6 +59,7 @@ public class StoneMasterHandler {
         }
         if (found) {
             clearMasterEquipment(player);
+            LOCKED_POSITIONS.remove(player);
             player.level().playSound(null, player.getX(), player.getY(), player.getZ(),
                     SoundEvents.NOTE_BLOCK_BASS.value(), SoundSource.PLAYERS, 1.0f, 0.5f);
             player.displayClientMessage(Component.translatable("msg.kots.stone.deactivated")
@@ -77,7 +83,7 @@ public class StoneMasterHandler {
                 continue;
             if (KeeperStoneItem.isActive(stack)) {
                 stack.remove(Kots3DataComponents.STONE_RECHARGE_UNTIL.get());
-                if (!player.hasEffect(Kots3Effects.FIRE_MASTER.get())) {
+                if (!player.hasEffect(Kots3Effects.fireMaster())) {
                     // The 10-minute master effect ran out -> stone switches to recharge.
                     stack.remove(Kots3DataComponents.STONE_ACTIVE.get());
                     KeeperStoneItem.startRecharge(stack, gameTime);
@@ -98,9 +104,11 @@ public class StoneMasterHandler {
             grantAndLockMasterEquipment(player);
         } else if (hasMasterEquipment(player)) {
             clearMasterEquipment(player);
+            LOCKED_POSITIONS.remove(player);
         }
 
         if (expired) {
+            LOCKED_POSITIONS.remove(player);
             player.displayClientMessage(Component.translatable("msg.kots.stone.expired")
                     .withStyle(ChatFormatting.GOLD), true);
             player.level().playSound(null, player.getX(), player.getY(), player.getZ(),
@@ -124,56 +132,7 @@ public class StoneMasterHandler {
                 KeeperStoneItem.startRecharge(stack, player.level().getGameTime());
             }
         }
-    }
-
-    /**
-     * Slot locking: any click (pickup, quick-move, number swap, drag, offhand swap)
-     * that touches a locked stack is cancelled server-side. Locked stacks can neither
-     * leave their slot nor be swapped with something else.
-     */
-    @SubscribeEvent
-    public static void onContainerClick(PlayerContainerEvent.Click event) {
-        ServerPlayer player = event.getEntity();
-        Slot slot = findSlot(player, event.getContainerId(), event.getSlotId());
-        if (slot == null)
-            return;
-        ItemStack slotStack = slot.getItem();
-        ItemStack cursor = player.containerMenu.getCarried();
-        boolean slotLocked = isLockedStack(player, slotStack);
-        boolean cursorLocked = isLockedStack(player, cursor);
-        if (slotLocked || cursorLocked) {
-            // Pure external drop into an empty, unlocked slot with an unlocked cursor
-            // never reaches this branch; anything involving a locked stack is refused.
-            event.setCanceled(true);
-        }
-    }
-
-    /** Cancel dropping locked equipment / active stones with the Q key. */
-    @SubscribeEvent
-    public static void onDropItem(PlayerEvent.Drop event) {
-        if (event.getEntity() instanceof ServerPlayer player && isLockedStack(player, event.getItemStack())) {
-            event.setCanceled(true);
-        }
-    }
-
-    private static Slot findSlot(ServerPlayer player, int containerId, int slotId) {
-        AbstractContainerMenu menu = containerId == 0
-                ? player.inventoryMenu
-                : (player.containerMenu != null
-                        && player.containerMenu.containerId == containerId ? player.containerMenu : null);
-        if (menu == null)
-            return null;
-        List<Slot> slots = menu.slots;
-        return slotId >= 0 && slotId < slots.size() ? slots.get(slotId) : null;
-    }
-
-    /** Locking also applies to hotbar selection changes: re-grant happens each tick anyway. */
-    private static boolean isLockedStack(ServerPlayer player, ItemStack stack) {
-        if (stack.isEmpty())
-            return false;
-        if (stack.getItem() instanceof KeeperStoneItem && KeeperStoneItem.isActive(stack))
-            return true;
-        return isMasterGear(stack) && player.hasEffect(Kots3Effects.FIRE_MASTER.get());
+        LOCKED_POSITIONS.remove(player);
     }
 
     /** True for equipment issued by an activated stone. */
@@ -183,7 +142,84 @@ public class StoneMasterHandler {
         if (stack.is(Kots3Items.FIRE_SWORD.get()))
             return true;
         return stack.getItem() instanceof ArmorItem armor
-                && armor.getMaterial() == com.auranite.keepersofthestonesthree.keepersofthestonesiii.effect.FireArmorItem.ARMOR_MATERIAL;
+                && armor.getMaterial() == FireArmorItem.ARMOR_MATERIAL;
+    }
+
+    /**
+     * Slot locking implemented as server-side position enforcement: every tick we know
+     * which stacks must be locked (the active stone and the issued master gear while the
+     * effect runs). Their slots are remembered; if any interaction (click-move, drag,
+     * number-key swap, Q-drop, offhand swap...) relocates or removes such a stack, it is
+     * snapped back to its original slot on the very next tick - effectively blocking the
+     * locked items from leaving their slots.
+     */
+    private static void enforceLockedSlots(ServerPlayer player) {
+        Inventory inv = player.getInventory();
+        boolean masterActive = player.hasEffect(Kots3Effects.fireMaster());
+        Map<Integer, Integer> remembered = LOCKED_POSITIONS.computeIfAbsent(player, p -> new HashMap<>());
+
+        // 1) Snap back: every remembered locked stack must sit in its remembered slot.
+        remembered.values().removeIf(slot -> !inv.getItem(slot).isEmpty());
+        remembered.entrySet().removeIf(e -> !isSameStack(inv.getItem(e.getValue()), e.getKey()));
+        for (Map.Entry<Integer, Integer> e : remembered.entrySet()) {
+            int id = e.getKey();
+            int slot = e.getValue();
+            int current = findStackById(inv, id);
+            if (current >= 0 && current != slot) {
+                // Move the stack back and restore whatever occupied the target slot.
+                ItemStack displaced = inv.getItem(slot);
+                inv.setItem(slot, inv.getItem(current));
+                inv.setItem(current, displaced);
+            } else if (current < 0) {
+                // The stack left the inventory (e.g. dropped): give it another copy here.
+                ItemStack replacement = replaceableStack(inv, id, slot);
+                if (replacement != null) {
+                    inv.setItem(slot, replacement);
+                }
+            }
+        }
+
+        // 2) Rebuild the lock map for the currently locked stacks.
+        remembered.clear();
+        for (int i = 0; i < inv.getContainerSize(); i++) {
+            ItemStack stack = inv.getItem(i);
+            if (isLockedStack(player, stack, masterActive)) {
+                remembered.put(System.identityHashCode(stack), i);
+            }
+        }
+    }
+
+    /** The active stone may not leave the inventory at all; gear may only leave via death. */
+    private static ItemStack replaceableStack(Inventory inv, int id, int slot) {
+        ItemStack inSlot = inv.getItem(slot);
+        if (inSlot.getItem() instanceof KeeperStoneItem) {
+            return new ItemStack(inSlot.getItem());
+        }
+        if (isMasterGear(inSlot)) {
+            return new ItemStack(inSlot.getItem());
+        }
+        return null;
+    }
+
+    private static int findStackById(Inventory inv, int id) {
+        for (int i = 0; i < inv.getContainerSize(); i++) {
+            ItemStack stack = inv.getItem(i);
+            if (!stack.isEmpty() && System.identityHashCode(stack) == id)
+                return i;
+        }
+        return -1;
+    }
+
+    private static boolean isSameStack(ItemStack stack, int id) {
+        return !stack.isEmpty() && System.identityHashCode(stack) == id;
+    }
+
+    private static boolean isLockedStack(Player player, ItemStack stack, boolean masterActive) {
+        if (stack.isEmpty())
+            return false;
+        if (stack.getItem() instanceof KeeperStoneItem && KeeperStoneItem.isActive(stack))
+            return true;
+        return masterActive && isMasterGear(stack);
     }
 
     private static void grantAndLockMasterEquipment(ServerPlayer player) {
@@ -196,6 +232,7 @@ public class StoneMasterHandler {
         setArmorIfMissing(player, EquipmentSlot.CHEST, Kots3Items.FIRE_ARMOR_CHESTPLATE.get());
         setArmorIfMissing(player, EquipmentSlot.LEGS, Kots3Items.FIRE_ARMOR_LEGGINGS.get());
         setArmorIfMissing(player, EquipmentSlot.FEET, Kots3Items.FIRE_ARMOR_BOOTS.get());
+        enforceLockedSlots(player);
     }
 
     private static void setArmorIfMissing(ServerPlayer player, EquipmentSlot slot, Item item) {

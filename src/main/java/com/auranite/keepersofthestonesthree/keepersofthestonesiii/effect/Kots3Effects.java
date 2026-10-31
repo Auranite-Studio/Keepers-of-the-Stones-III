@@ -1,6 +1,7 @@
 package com.auranite.keepersofthestonesthree.keepersofthestonesiii.effect;
 
 import com.auranite.keepersofthestonesthree.keepersofthestonesiii.KeepersOfTheStonesIIIMod;
+import net.minecraft.core.Holder;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.effect.MobEffect;
@@ -18,6 +19,11 @@ import java.util.List;
 public class Kots3Effects {
     public static final DeferredRegister<MobEffect> REGISTRY = DeferredRegister.create(Registries.MOB_EFFECT, KeepersOfTheStonesIIIMod.MODID);
     public static final DeferredHolder<MobEffect, MobEffect> FIRE_MASTER = REGISTRY.register("fire_master", () -> new FireMasterEffect(0xFF5500));
+
+    /** Holder of the master effect, usable directly with hasEffect/addEffect/removeEffect. */
+    public static Holder<MobEffect> fireMaster() {
+        return FIRE_MASTER;
+    }
 
 
     // ==================== Auto-generated resonance display effects ====================
