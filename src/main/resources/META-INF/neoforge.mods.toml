@@ -35,3 +35,10 @@ type="required"
 versionRange="[1.21.1,1.22)"
 ordering="NONE"
 side="BOTH"
+
+[[dependencies.kots]]
+modId="curios"
+type="required"
+versionRange="[0,)"
+ordering="NONE"
+side="BOTH"

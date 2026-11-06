@@ -1,6 +1,7 @@
 package com.auranite.keepersofthestonesthree.keepersofthestonesiii;
 
 import com.auranite.keepersofthestonesthree.keepersofthestonesiii.effect.Kots3Effects;
+import com.auranite.keepersofthestonesthree.keepersofthestonesiii.event.FireStoneCuriosHandler;
 import com.auranite.keepersofthestonesthree.keepersofthestonesiii.item.Kots3Items;
 import com.auranite.keepersofthestonesthree.keepersofthestonesiii.item.Kots3Tabs;
 import net.neoforged.fml.ModContainer;
@@ -37,6 +38,7 @@ public class KeepersOfTheStonesIIIMod {
     public KeepersOfTheStonesIIIMod(IEventBus modEventBus, ModContainer modContainer) {
 
         NeoForge.EVENT_BUS.register(this);
+        NeoForge.EVENT_BUS.register(new FireStoneCuriosHandler());
         modEventBus.addListener(this::registerNetworking);
 
         // Register mod items and tabs

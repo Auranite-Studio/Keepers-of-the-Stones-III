@@ -55,5 +55,11 @@
   "item.kots.time_stone": "Time Stone",
   "item.kots.tornado_stone": "Tornado Stone",
   "item.kots.vacuum_stone": "Vacuum Stone",
-  "item.kots.water_stone": "Water Stone"
+  "item.kots.water_stone": "Water Stone",
+
+  "item.kots.fire_armor_helmet": "Fire Helmet",
+  "item.kots.fire_armor_chestplate": "Fire Chestplate",
+  "item.kots.fire_armor_leggings": "Fire Leggings",
+  "item.kots.fire_armor_boots": "Fire Boots",
+  "item.kots.fire_sword": "Fire Sword"
 }

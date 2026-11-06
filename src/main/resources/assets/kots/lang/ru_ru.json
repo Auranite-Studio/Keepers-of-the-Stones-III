@@ -55,5 +55,11 @@
   "item.kots.time_stone": "Камень Времени",
   "item.kots.tornado_stone": "Камень Торнадо",
   "item.kots.vacuum_stone": "Камень Вакуума",
-  "item.kots.water_stone": "Камень Воды"
+  "item.kots.water_stone": "Камень Воды",
+
+  "item.kots.fire_armor_helmet": "Огненный Шлем",
+  "item.kots.fire_armor_chestplate": "Огненный Нагрудник",
+  "item.kots.fire_armor_leggings": "Огненные Поножи",
+  "item.kots.fire_armor_boots": "Огненные Ботинки",
+  "item.kots.fire_sword": "Огненный Меч"
 }
