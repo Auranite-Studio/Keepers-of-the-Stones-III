@@ -1,6 +1,5 @@
-package com.auranite.keepersofthestonesthree.keepersofthestonesiii.effect;
+package com.auranite.keepersofthestonesthree.keepersofthestonesiii.item;
 
-import com.auranite.keepersofthestonesthree.keepersofthestonesiii.item.Kots3Items;
 import net.neoforged.neoforge.event.ModifyDefaultComponentsEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.bus.api.SubscribeEvent;

@@ -10,6 +10,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.enchantment.Enchantments;
 import net.minecraft.world.level.GameRules;
 import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.neoforge.event.entity.item.ItemTossEvent;
 import net.neoforged.neoforge.event.entity.living.LivingDropsEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.event.tick.PlayerTickEvent;
@@ -29,6 +30,27 @@ public class FireStoneCuriosHandler {
     private static final EquipmentSlot[] ARMOR_SLOTS = {EquipmentSlot.HEAD, EquipmentSlot.CHEST, EquipmentSlot.LEGS, EquipmentSlot.FEET};
     private static final String[] SLOT_NAMES = {"Head", "Chest", "Legs", "Feet"};
 
+    // ==================== PREVENT SWORD DROP ====================
+
+    @SubscribeEvent
+    public void onItemToss(ItemTossEvent event) {
+        if (event.getEntity().level().isClientSide) {
+            return;
+        }
+
+        ItemEntity droppedItem = event.getEntity();
+        ItemStack stack = droppedItem.getItem();
+
+        if (stack.getItem() == Kots3Items.FIRE_SWORD.get()) {
+            event.setCanceled(true);
+            droppedItem.discard();
+
+            if (event.getPlayer() instanceof ServerPlayer serverPlayer) {
+                serverPlayer.getInventory().add(stack);
+            }
+        }
+    }
+
     // ==================== PLAYER DEATH HANDLER ====================
 
     @SubscribeEvent
@@ -37,8 +59,6 @@ public class FireStoneCuriosHandler {
             return;
         }
 
-        // Если keepInventory включен, игрок сохраняет всё естественно.
-        // Мы просто выходим, не трогая ни дроп, ни теги, ни слоты.
         if (serverPlayer.level().getGameRules().getBoolean(GameRules.RULE_KEEPINVENTORY)) {
             return;
         }
@@ -47,18 +67,15 @@ public class FireStoneCuriosHandler {
         boolean hasStoneEquipped = hasFireStoneEquipped(serverPlayer);
         boolean hasOriginalArmorSaved = data.contains(TAG_ORIGINAL_ARMOR);
 
-        // 1. Remove fire armor from drops (don't drop it)
         if (hasFireArmorEquipped(serverPlayer)) {
             Collection<ItemEntity> droppedItems = event.getDrops();
             droppedItems.removeIf(item -> isFireArmor(item.getItem()));
         }
 
-        // 2. Drop fire stone instead of deleting it forever
         if (hasStoneEquipped) {
             dropFireStone(serverPlayer, event.getDrops());
         }
 
-        // 3. Drop original armor if saved
         if (hasOriginalArmorSaved) {
             CompoundTag armorTag = data.getCompound(TAG_ORIGINAL_ARMOR);
             for (int i = 0; i < SLOT_NAMES.length; i++) {
@@ -79,7 +96,6 @@ public class FireStoneCuriosHandler {
             }
         }
 
-        // 4. Remove fire armor from player slots (ensures clean state for original armor restore)
         removeFireArmorFromSlots(serverPlayer);
     }
 
@@ -124,9 +140,6 @@ public class FireStoneCuriosHandler {
             CompoundTag oldData = oldPlayer.getPersistentData();
             CompoundTag newData = newPlayer.getPersistentData();
 
-            // ИСПРАВЛЕНО: Копируем теги состояния ВСЕГДА, независимо от keepInventory.
-            // keepInventory влияет только на физический дроп, но логическое состояние
-            // системы (какая броня была оригинальной) должно мигрировать на нового игрока.
             if (oldData.contains(TAG_ORIGINAL_ARMOR)) {
                 newData.put(TAG_ORIGINAL_ARMOR, oldData.getCompound(TAG_ORIGINAL_ARMOR).copy());
             }
@@ -134,14 +147,9 @@ public class FireStoneCuriosHandler {
                 newData.putBoolean(TAG_FIRE_SET_GRANTED, oldData.getBoolean(TAG_FIRE_SET_GRANTED));
             }
 
-            // Если включен keepInventory, мы не должны ничего удалять или дропать.
-            // Теги уже скопированы, система продолжит работать корректно.
             if (oldPlayer.level().getGameRules().getBoolean(GameRules.RULE_KEEPINVENTORY)) {
                 return;
             }
-
-            // Дальнейшая логика дропа в Clone не нужна, так как она полностью
-            // и корректно обрабатывается в LivingDropsEvent.
         }
     }
 
@@ -158,10 +166,8 @@ public class FireStoneCuriosHandler {
             boolean hasStoneFlag = data.getBoolean(TAG_FIRE_SET_GRANTED);
             boolean hasOriginalArmor = data.contains(TAG_ORIGINAL_ARMOR);
 
-            // Защита от вечной блокировки в огненной броне при потере NBT (сбой сервера)
             if (hasStoneFlag && !hasOriginalArmor && hasFireArmorEquipped(serverPlayer)) {
                 removeFireArmorFromSlots(serverPlayer);
-                removeFireSword(serverPlayer);
                 data.remove(TAG_FIRE_SET_GRANTED);
                 data.remove(TAG_ORIGINAL_ARMOR);
             } else if (!hasStoneFlag) {
@@ -193,22 +199,35 @@ public class FireStoneCuriosHandler {
     private void grantFireSet(ServerPlayer player) {
         CompoundTag data = player.getPersistentData();
 
+        // Если набор уже выдан - ничего не делаем
         if (data.getBoolean(TAG_FIRE_SET_GRANTED)) {
-            // Already granted - just ensure armor is equipped safely (without resetting durability)
-            equipFireArmorSafely(player);
             return;
         }
 
-        // Edge case: fire armor is already equipped but original armor not saved (e.g., after reload)
+        // Edge case: fire armor is already equipped but original armor not saved
         if (hasFireArmorEquipped(player)) {
             data.putBoolean(TAG_FIRE_SET_GRANTED, true);
             return;
         }
 
-        // First time granting - save original armor
+        // First time granting - save original armor and equip fire set
         saveOriginalArmor(player);
         data.putBoolean(TAG_FIRE_SET_GRANTED, true);
-        equipFireArmorSafely(player);
+        equipFireArmorOnce(player);
+    }
+
+    private void equipFireArmorOnce(ServerPlayer player) {
+        // Надеваем броню один раз
+        player.setItemSlot(EquipmentSlot.HEAD, createEnchantedArmor(player, Kots3Items.FIRE_ARMOR_HELMET.get()));
+        player.setItemSlot(EquipmentSlot.CHEST, createEnchantedArmor(player, Kots3Items.FIRE_ARMOR_CHESTPLATE.get()));
+        player.setItemSlot(EquipmentSlot.LEGS, createEnchantedArmor(player, Kots3Items.FIRE_ARMOR_LEGGINGS.get()));
+        player.setItemSlot(EquipmentSlot.FEET, createEnchantedArmor(player, Kots3Items.FIRE_ARMOR_BOOTS.get()));
+
+        // Добавляем меч один раз
+        ItemStack sword = new ItemStack(Kots3Items.FIRE_SWORD.get());
+        sword.enchant(player.level().holderOrThrow(Enchantments.BINDING_CURSE), 1);
+        sword.enchant(player.level().holderOrThrow(Enchantments.VANISHING_CURSE), 1);
+        player.getInventory().add(sword);
     }
 
     private void saveOriginalArmor(ServerPlayer player) {
@@ -243,29 +262,6 @@ public class FireStoneCuriosHandler {
             }
             data.remove(TAG_ORIGINAL_ARMOR);
         }
-    }
-
-    private void equipFireArmorSafely(ServerPlayer player) {
-        equipSlotIfMissingOrWrong(player, EquipmentSlot.HEAD, Kots3Items.FIRE_ARMOR_HELMET.get());
-        equipSlotIfMissingOrWrong(player, EquipmentSlot.CHEST, Kots3Items.FIRE_ARMOR_CHESTPLATE.get());
-        equipSlotIfMissingOrWrong(player, EquipmentSlot.LEGS, Kots3Items.FIRE_ARMOR_LEGGINGS.get());
-        equipSlotIfMissingOrWrong(player, EquipmentSlot.FEET, Kots3Items.FIRE_ARMOR_BOOTS.get());
-
-        if (!hasFireSwordInInventory(player)) {
-            ItemStack sword = new ItemStack(Kots3Items.FIRE_SWORD.get());
-            sword.enchant(player.level().holderOrThrow(Enchantments.BINDING_CURSE), 1);
-            sword.enchant(player.level().holderOrThrow(Enchantments.VANISHING_CURSE), 1);
-            player.getInventory().add(sword);
-        }
-    }
-
-    private void equipSlotIfMissingOrWrong(ServerPlayer player, EquipmentSlot slot, net.minecraft.world.item.Item expectedItem) {
-        ItemStack current = player.getItemBySlot(slot);
-        // Если слот уже содержит правильный предмет, НЕ перезаписываем его (сохраняем прочность и NBT)
-        if (current.getItem() == expectedItem) {
-            return;
-        }
-        player.setItemSlot(slot, createEnchantedArmor(player, expectedItem));
     }
 
     // ==================== REMOVE FIRE SET ====================
@@ -319,16 +315,6 @@ public class FireStoneCuriosHandler {
                 break;
             }
         }
-    }
-
-    private boolean hasFireSwordInInventory(ServerPlayer player) {
-        for (int i = 0; i < player.getInventory().getContainerSize(); i++) {
-            ItemStack stack = player.getInventory().getItem(i);
-            if (stack.getItem() == Kots3Items.FIRE_SWORD.get()) {
-                return true;
-            }
-        }
-        return false;
     }
 
     @SuppressWarnings("unchecked")

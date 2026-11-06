@@ -2,8 +2,6 @@
 package com.auranite.keepersofthestonesthree.keepersofthestonesiii.item;
 
 import com.auranite.keepersofthestonesthree.keepersofthestonesiii.KeepersOfTheStonesIIIMod;
-import com.auranite.keepersofthestonesthree.keepersofthestonesiii.effect.FireArmorItem;
-import com.auranite.keepersofthestonesthree.keepersofthestonesiii.effect.FireSwordItem;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Rarity;
