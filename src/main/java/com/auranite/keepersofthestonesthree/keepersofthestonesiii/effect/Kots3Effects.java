@@ -17,8 +17,6 @@ import java.util.List;
 
 public class Kots3Effects {
     public static final DeferredRegister<MobEffect> REGISTRY = DeferredRegister.create(Registries.MOB_EFFECT, KeepersOfTheStonesIIIMod.MODID);
-    public static final DeferredHolder<MobEffect, MobEffect> FIRE_MASTER = REGISTRY.register("burn", () -> new FireMasterEffect(0xFF5500));
-
 
     // ==================== Auto-generated resonance display effects ====================
     // These effects are used solely for rendering resonance icons (textures)

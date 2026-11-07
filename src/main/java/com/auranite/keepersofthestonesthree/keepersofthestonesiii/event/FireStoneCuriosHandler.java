@@ -199,7 +199,6 @@ public class FireStoneCuriosHandler {
     private void grantFireSet(ServerPlayer player) {
         CompoundTag data = player.getPersistentData();
 
-        // Если набор уже выдан - ничего не делаем
         if (data.getBoolean(TAG_FIRE_SET_GRANTED)) {
             return;
         }
@@ -217,13 +216,11 @@ public class FireStoneCuriosHandler {
     }
 
     private void equipFireArmorOnce(ServerPlayer player) {
-        // Надеваем броню один раз
         player.setItemSlot(EquipmentSlot.HEAD, createEnchantedArmor(player, Kots3Items.FIRE_ARMOR_HELMET.get()));
         player.setItemSlot(EquipmentSlot.CHEST, createEnchantedArmor(player, Kots3Items.FIRE_ARMOR_CHESTPLATE.get()));
         player.setItemSlot(EquipmentSlot.LEGS, createEnchantedArmor(player, Kots3Items.FIRE_ARMOR_LEGGINGS.get()));
         player.setItemSlot(EquipmentSlot.FEET, createEnchantedArmor(player, Kots3Items.FIRE_ARMOR_BOOTS.get()));
 
-        // Добавляем меч один раз
         ItemStack sword = new ItemStack(Kots3Items.FIRE_SWORD.get());
         sword.enchant(player.level().holderOrThrow(Enchantments.BINDING_CURSE), 1);
         sword.enchant(player.level().holderOrThrow(Enchantments.VANISHING_CURSE), 1);
