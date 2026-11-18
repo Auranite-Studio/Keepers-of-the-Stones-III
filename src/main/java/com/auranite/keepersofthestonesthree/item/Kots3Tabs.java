@@ -1,7 +1,6 @@
-package com.auranite.keepersofthestonesthree.keepersofthestonesiii.item;
+package com.auranite.keepersofthestonesthree.item;
 
-import com.auranite.keepersofthestonesthree.keepersofthestonesiii.KeepersOfTheStonesIIIMod;
-import net.minecraft.world.item.Items;
+import com.auranite.keepersofthestonesthree.KeepersOfTheStonesIIIMod;
 import net.neoforged.neoforge.registries.DeferredRegister;
 import net.neoforged.neoforge.registries.DeferredHolder;
 

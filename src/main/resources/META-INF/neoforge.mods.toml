@@ -42,3 +42,6 @@ type="required"
 versionRange="[0,)"
 ordering="NONE"
 side="BOTH"
+
+[[mixins]]
+config = "kots.mixins.json"

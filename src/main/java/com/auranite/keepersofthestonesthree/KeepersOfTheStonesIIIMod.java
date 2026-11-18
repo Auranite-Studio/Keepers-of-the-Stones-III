@@ -1,9 +1,9 @@
-package com.auranite.keepersofthestonesthree.keepersofthestonesiii;
+package com.auranite.keepersofthestonesthree;
 
-import com.auranite.keepersofthestonesthree.keepersofthestonesiii.effect.Kots3Effects;
-import com.auranite.keepersofthestonesthree.keepersofthestonesiii.event.FireStoneCuriosHandler;
-import com.auranite.keepersofthestonesthree.keepersofthestonesiii.item.Kots3Items;
-import com.auranite.keepersofthestonesthree.keepersofthestonesiii.item.Kots3Tabs;
+import com.auranite.keepersofthestonesthree.effect.Kots3Effects;
+import com.auranite.keepersofthestonesthree.event.FireStoneCuriosHandler;
+import com.auranite.keepersofthestonesthree.item.Kots3Items;
+import com.auranite.keepersofthestonesthree.item.Kots3Tabs;
 import net.neoforged.fml.ModContainer;
 import org.apache.logging.log4j.Logger;
 import org.apache.logging.log4j.LogManager;

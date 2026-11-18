@@ -1,0 +1,12 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "com.auranite.keepersofthestonesthree.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "SlotMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

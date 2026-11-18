@@ -1,7 +1,7 @@
 
-package com.auranite.keepersofthestonesthree.keepersofthestonesiii.item;
+package com.auranite.keepersofthestonesthree.item;
 
-import com.auranite.keepersofthestonesthree.keepersofthestonesiii.KeepersOfTheStonesIIIMod;
+import com.auranite.keepersofthestonesthree.KeepersOfTheStonesIIIMod;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Rarity;

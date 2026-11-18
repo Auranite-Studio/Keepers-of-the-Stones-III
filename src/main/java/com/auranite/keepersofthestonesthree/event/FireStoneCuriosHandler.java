@@ -1,9 +1,11 @@
-package com.auranite.keepersofthestonesthree.keepersofthestonesiii.event;
+package com.auranite.keepersofthestonesthree.event;
 
-import com.auranite.keepersofthestonesthree.keepersofthestonesiii.item.Kots3Items;
+import com.auranite.keepersofthestonesthree.item.Kots3Items;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.entity.decoration.ArmorStand;
+import net.minecraft.world.entity.decoration.ItemFrame;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
@@ -13,6 +15,7 @@ import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.neoforge.event.entity.item.ItemTossEvent;
 import net.neoforged.neoforge.event.entity.living.LivingDropsEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
+import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent;
 import net.neoforged.neoforge.event.tick.PlayerTickEvent;
 import top.theillusivec4.curios.api.CuriosApi;
 import top.theillusivec4.curios.api.type.capability.ICuriosItemHandler;
@@ -30,7 +33,23 @@ public class FireStoneCuriosHandler {
     private static final EquipmentSlot[] ARMOR_SLOTS = {EquipmentSlot.HEAD, EquipmentSlot.CHEST, EquipmentSlot.LEGS, EquipmentSlot.FEET};
     private static final String[] SLOT_NAMES = {"Head", "Chest", "Legs", "Feet"};
 
+
     // ==================== PREVENT SWORD DROP ====================
+
+    @SubscribeEvent
+    public void onEntityInteract(PlayerInteractEvent.EntityInteract event) {
+        if (!(event.getTarget() instanceof ItemFrame) && !(event.getTarget() instanceof ArmorStand)) {
+            return;
+        }
+
+        Player player = event.getEntity();
+        ItemStack mainHand = player.getMainHandItem();
+        ItemStack offHand = player.getOffhandItem();
+
+        if (mainHand.is(Kots3Items.FIRE_SWORD.get()) || offHand.is(Kots3Items.FIRE_SWORD.get())) {
+            event.setCanceled(true);
+        }
+    }
 
     @SubscribeEvent
     public void onItemToss(ItemTossEvent event) {

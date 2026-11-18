@@ -1,4 +1,4 @@
-package com.auranite.keepersofthestonesthree.keepersofthestonesiii.item;
+package com.auranite.keepersofthestonesthree.item;
 
 import net.neoforged.neoforge.event.ModifyDefaultComponentsEvent;
 import net.neoforged.fml.common.EventBusSubscriber;

@@ -1,4 +1,4 @@
-package com.auranite.keepersofthestonesthree.keepersofthestonesiii.item;
+package com.auranite.keepersofthestonesthree.item;
 
 import net.neoforged.neoforge.registries.RegisterEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
