@@ -26,18 +26,21 @@ import java.util.List;
  * При использовании (ПКМ) при наличии 3 очков Пламени:
  * - Списывает 3 очка
  * - Применяет эффект Поджигатель (+10%/+20% огненный урон, +5%/+10% сопротивление)
- * - Выпускает огненный луч на 3 секунды, нанося 160% урона в секунду
+ * - Выпускает огненный луч на 3 секунды, нанося суммарно 480% урона (160% в секунду)
  */
 public class FlameTongueAbility {
 
     private static final int FLAME_MAX_POINTS = 3;
     private static final int FLAME_TONGUE_DURATION_TICKS = 60; // 3 секунды
-    private static final float DAMAGE_PER_SECOND_MULTIPLIER = 1.6f; // 160% от базового урона
+    private static final float TOTAL_DAMAGE_MULTIPLIER = 4.8f; // суммарно 480% от базового урона оружия
     private static final int FLAME_RANGE = 12; // дальность луча
     private static final int FLAME_WIDTH = 2; // ширина луча
-    private static final int FLAME_COOLDOWN_TICKS = 20; // 1 секунда кулдаун
+    private static final int BEAM_UPDATE_INTERVAL_TICKS = 5; // периодическое обновление луча (6 обновлений за 3 сек)
 
-    private static final java.util.Map<Integer, Long> LAST_ACTIVATION_TIME = new java.util.concurrent.ConcurrentHashMap<>();
+    /**
+     * Активные лучи: id игрока -> время окончания действия (gameTime).
+     */
+    private static final java.util.Map<Integer, Long> ACTIVE_BEAMS = new java.util.concurrent.ConcurrentHashMap<>();
 
     /**
      * Активация способности через ПКМ по блоку.
@@ -48,8 +51,7 @@ public class FlameTongueAbility {
         if (player.level().isClientSide) return;
         if (!(player instanceof ServerPlayer serverPlayer)) return;
 
-        KeepersOfTheStonesIIIMod.LOGGER.info("FlameTongue: RightClickBlock called by {}", player.getName().getString());
-
+        // Способность не блокирует обычное взаимодействие с блоками — событие не отменяется.
         tryActivateFlameTongue(serverPlayer);
     }
 
@@ -62,51 +64,32 @@ public class FlameTongueAbility {
         if (player.level().isClientSide) return;
         if (!(player instanceof ServerPlayer serverPlayer)) return;
 
-        KeepersOfTheStonesIIIMod.LOGGER.info("FlameTongue: RightClickEmpty called by {}", player.getName().getString());
-
         tryActivateFlameTongue(serverPlayer);
-    }
-
-    /**
-     * Проверка: можно ли активировать способность (кулдаун).
-     */
-    private boolean canActivate(ServerPlayer player) {
-        long currentTime = player.level().getGameTime();
-        Long lastTime = LAST_ACTIVATION_TIME.get(player.getId());
-        if (lastTime != null && (currentTime - lastTime) < FLAME_COOLDOWN_TICKS) {
-            return false;
-        }
-        LAST_ACTIVATION_TIME.put(player.getId(), currentTime);
-        return true;
     }
 
     /**
      * Основная логика активации способности.
      */
     private void tryActivateFlameTongue(ServerPlayer player) {
-        // Проверка: можно ли активировать (кулдаун)
-        if (!canActivate(player)) {
-            KeepersOfTheStonesIIIMod.LOGGER.debug("Flame Tongue: cooldown active");
+        // Проверка: способность уже активна? (повторная активация возможна только после окончания луча)
+        long gameTime = player.level().getGameTime();
+        Long beamEnd = ACTIVE_BEAMS.get(player.getId());
+        if (beamEnd != null && gameTime < beamEnd) {
             return;
         }
 
         // Проверка: достаточно ли очков Пламени
         int currentPoints = Kots3Attachments.getFlamePoints(player);
-        KeepersOfTheStonesIIIMod.LOGGER.info("Flame Tongue: checking points = {}", currentPoints);
         if (currentPoints < FLAME_MAX_POINTS) {
-            KeepersOfTheStonesIIIMod.LOGGER.info("Flame Tongue: not enough points ({} < {})", currentPoints, FLAME_MAX_POINTS);
             return;
         }
 
         // Списываем ВСЕ очки (максимум 3)
         Kots3Attachments.setFlamePoints(player, 0);
-        int afterSet = Kots3Attachments.getFlamePoints(player);
-        KeepersOfTheStonesIIIMod.LOGGER.info("Flame Tongue: set points to {}, actual = {}", 0, afterSet);
         syncFlamePoints(player);
 
         // Применяем эффект Поджигателя
         int igniterLevel = FlameSkillHandler.getIgniterLevel(player);
-        KeepersOfTheStonesIIIMod.LOGGER.info("Flame Tongue: applying Igniter level {}", igniterLevel);
         player.addEffect(new net.minecraft.world.effect.MobEffectInstance(
                 Kots3Effects.IGNITER, 200, igniterLevel - 1, false, true));
 
@@ -114,48 +97,67 @@ public class FlameTongueAbility {
         player.displayClientMessage(Component.translatable("ability.kots.flame_tongue_activated"), true);
 
         // Запускаем огненный луч
-        KeepersOfTheStonesIIIMod.LOGGER.info("Flame Tongue: starting flame beam");
-        startFlameTongue(player);
+        startFlameTongue(player, gameTime);
     }
 
     /**
      * Запускает огненный луч на 3 секунды.
-     * Наносит урон 160% от базового урона оружия в секунду.
+     * Наносит суммарно 480% урона от базового значения оружия (160% в секунду).
      */
-    private void startFlameTongue(ServerPlayer player) {
+    private void startFlameTongue(ServerPlayer player, long startTime) {
+        ACTIVE_BEAMS.put(player.getId(), startTime + FLAME_TONGUE_DURATION_TICKS);
+
+        // Первый залп сразу, далее — централизованно в onPlayerTick
+        applyBeamDamage(player);
+        spawnFlameBeamParticles(player);
+    }
+
+    /**
+     * Централизованный тикер активных лучей: луч движется вместе с игроком,
+     * периодическое нанесение урона и спавн частиц.
+     */
+    @SubscribeEvent
+    public void onPlayerTick(net.neoforged.neoforge.event.tick.PlayerTickEvent.Post event) {
+        Player p = event.getEntity();
+        if (p.level().isClientSide || !(p instanceof ServerPlayer player)) return;
+
+        long gameTime = player.level().getGameTime();
+        Long beamEnd = ACTIVE_BEAMS.get(player.getId());
+        if (beamEnd == null || gameTime >= beamEnd) return;
+        if (!player.isAlive() || player.isDeadOrDying()) {
+            ACTIVE_BEAMS.remove(player.getId());
+            return;
+        }
+
+        int elapsed = (int) (gameTime - (beamEnd - FLAME_TONGUE_DURATION_TICKS));
+        if (elapsed % BEAM_UPDATE_INTERVAL_TICKS != 0) return;
+
+        applyBeamDamage(player);
+        spawnFlameBeamParticles(player);
+    }
+
+    /**
+     * Наносит урон лучом по всем целям перед игроком.
+     */
+    private void applyBeamDamage(ServerPlayer player) {
         float baseWeaponDamage = getBaseWeaponDamage(player);
-        float damagePerTick = (baseWeaponDamage * DAMAGE_PER_SECOND_MULTIPLIER) / 20.0f;
+        float damagePerUpdate = (baseWeaponDamage * TOTAL_DAMAGE_MULTIPLIER)
+                / ((float) FLAME_TONGUE_DURATION_TICKS / BEAM_UPDATE_INTERVAL_TICKS);
 
-        KeepersOfTheStonesIIIMod.LOGGER.info("Flame Tongue: damagePerTick = {}", damagePerTick);
+        for (LivingEntity target : findTargetsInBeam(player)) {
+            if (target.isAlive() && !target.isSpectator()) {
+                ElementDamageHandler.dealElementDamage(
+                        target,
+                        ElementType.FIRE,
+                        damagePerUpdate,
+                        1.0f,
+                        player,
+                        false);
 
-        // Запускаем тики урона и частицы
-        for (int tick = 0; tick < FLAME_TONGUE_DURATION_TICKS; tick++) {
-            final int t = tick;
-            KeepersOfTheStonesIIIMod.queueServerWork(tick + 1, () -> {
-                if (!player.isAlive() || player.isDeadOrDying()) {
-                    return;
-                }
-
-                if (!player.level().isClientSide) {
-                    // Наносим урон по лучу
-                    final List<LivingEntity> beamTargets = findTargetsInBeam(player);
-                    KeepersOfTheStonesIIIMod.LOGGER.info("Flame Tongue: tick {} found {} targets", t, beamTargets.size());
-                    for (LivingEntity target : beamTargets) {
-                        if (target.isAlive() && !target.isSpectator()) {
-                            ElementDamageHandler.dealElementDamage(
-                                    target,
-                                    ElementType.FIRE,
-                                    damagePerTick,
-                                    1.0f,
-                                    player,
-                                    false);
-                        }
-                    }
-
-                    // Спавним частицы огня (луч)
-                    spawnFlameBeamParticles(player);
-                }
-            });
+                // Если на цели есть поджог, Abloom вызывает взрыв огненного резонанса —
+                // начисляем 2 очка Пламени (не чаще раза в 3 секунды на пару игрок-цель).
+                FlameSkillHandler.onFireResonanceExplosion(player, target);
+            }
         }
     }
 

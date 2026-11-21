@@ -1,26 +1,27 @@
 package com.auranite.keepersofthestonesthree.event;
 
 import com.auranite.abloom.init.AbloomModEffects;
-import com.auranite.abloom.util.DamageModificationManager;
-import com.auranite.abloom.util.DamageModificationManager.DamageModifier;
 import com.auranite.keepersofthestonesthree.init.Kots3Attachments;
 import com.auranite.keepersofthestonesthree.item.Kots3Items;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.world.damagesource.DamageTypes;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
-import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.material.Fluids;
+import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.neoforge.event.entity.living.LivingDamageEvent;
+import net.neoforged.neoforge.event.entity.living.LivingDeathEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.event.tick.PlayerTickEvent;
 import net.neoforged.neoforge.network.PacketDistributor;
@@ -43,6 +44,12 @@ import top.theillusivec4.curios.api.type.inventory.IDynamicStackHandler;
 public class FlameSkillHandler {
 
     private static final long DAMAGE_POINT_COOLDOWN_TICKS = 60L; // 3 секунды = 60 тиков
+    private static final long RESONANCE_COOLDOWN_TICKS = 60L;    // 3 секунды на резонансные очки
+
+    /**
+     * Кулдаун начисления очков за огненный резонанс (на пару атакующий -> цель).
+     */
+    private static final Map<String, Long> LAST_RESONANCE_TIME = new ConcurrentHashMap<>();
 
     /**
      * Статический helper для синхронизации очков Пламени с клиентом.
@@ -52,53 +59,51 @@ public class FlameSkillHandler {
         PacketDistributor.sendToPlayer(player, new com.auranite.keepersofthestonesthree.network.FlamePointsSyncPacket(points));
     }
 
-    static {
-        // Регистрируем модификатор для перехвата FIRE резонанса
-        DamageModificationManager.registerModifier(new DamageModifier() {
-            @Override
-            public float modifyDamage(LivingEntity target, DamageSource source, float baseDamage, float currentDamage) {
-                if (target.level().isClientSide) return currentDamage;
+    /**
+     * Помечает цель как поражённую огненным уроном (кандидат на огненный резонанс).
+     * Используется для начисления очков при фактических взрывах, причинённых игроком.
+     */
+    public static void markFireHit(ServerPlayer attacker, LivingEntity target) {
+        if (attacker == null || target == null || target.level().isClientSide) return;
+        LAST_RESONANCE_TIME.putIfAbsent(resonanceKey(attacker, target), -1L); // помечен, ещё не начислено
+    }
 
-                // Проверяем, что это FIRE урон от резонанса
-                // Резонансный FIRE урон имеет msgId "abloom:fire_damage"
-                String msgId = source.type().msgId();
-                if (msgId == null || !msgId.contains("fire")) return currentDamage;
+    private static String resonanceKey(ServerPlayer attacker, LivingEntity target) {
+        return attacker.getUUID() + ":" + target.getUUID();
+    }
 
-                // Проверяем, что на цели есть эффект BURN (признак резонанса)
-                if (!target.hasEffect(AbloomModEffects.BURN)) return currentDamage;
+    /**
+     * Пробует начислить 2 очка Пламени за взрыв огненного резонанса на цели.
+     * Срабатывает один раз в RESONANCE_COOLDOWN_TICKS (3 секунды) на пару атакующий-цель.
+     */
+    private static boolean tryGrantResonancePoints(ServerPlayer attacker, LivingEntity target) {
+        long gameTime = target.level().getGameTime();
+        String key = resonanceKey(attacker, target);
+        Long last = LAST_RESONANCE_TIME.get(key);
+        if (last != null && last >= 0 && gameTime - last < RESONANCE_COOLDOWN_TICKS) return false; // кулдаун 3 сек
+        LAST_RESONANCE_TIME.put(key, gameTime);
+        Kots3Attachments.addFlamePoints(attacker, 2);
+        syncFlamePointsStatic(attacker);
+        return true;
+    }
 
-                // Получаем атакующего
-                Entity causingEntity = source.getEntity();
-                if (!(causingEntity instanceof ServerPlayer attacker)) return currentDamage;
-
-                // Начисляем 2 очка за FIRE резонанс
-                Kots3Attachments.addFlamePoints(attacker, 2);
-                syncFlamePointsStatic(attacker);
-
-                return currentDamage;
-            }
-        }, -1); // Low priority — после Abloom
+    /**
+     * Начисляет 2 очка Пламени при срабатывании взрыва огненного резонанса Abloom:
+     * FIRE-урон по цели, у которой есть эффект поджога (BURN). Вызывается из FlameTongueAbility
+     * сразу после dealElementDamage, пока эффект ещё висит на цели.
+     */
+    public static void onFireResonanceExplosion(ServerPlayer attacker, LivingEntity target) {
+        if (attacker == null || target == null || target.level().isClientSide) return;
+        if (!target.hasEffect(AbloomModEffects.BURN)) return;
+        tryGrantResonancePoints(attacker, target);
     }
 
     // ==================== АКТИВАЦИЯ КАМНЯ ====================
 
     @SubscribeEvent
     public void onPlayerLoggedIn(PlayerEvent.PlayerLoggedInEvent event) {
-        if (!(event.getEntity() instanceof ServerPlayer serverPlayer)) return;
-        if (serverPlayer.level().isClientSide) return;
-
-        if (hasFireStoneEquipped(serverPlayer)) {
-            grantInitialFlamePoints(serverPlayer);
-        }
-    }
-
-    @SubscribeEvent
-    public void onPlayerChangedDimension(PlayerEvent.PlayerChangedDimensionEvent event) {
-        if (!(event.getEntity() instanceof ServerPlayer serverPlayer)) return;
-        if (serverPlayer.level().isClientSide) return;
-
-        if (hasFireStoneEquipped(serverPlayer)) {
-            grantInitialFlamePoints(serverPlayer);
+        if (event.getEntity() instanceof ServerPlayer serverPlayer) {
+            STONE_WAS_EQUIPPED.remove(serverPlayer.getUUID()); // при входе переопределим состояние по факту экипировки
         }
     }
 
@@ -110,47 +115,90 @@ public class FlameSkillHandler {
         boolean hasStone = hasFireStoneEquipped(serverPlayer);
 
         if (hasStone) {
-            if (Kots3Attachments.getFlamePoints(serverPlayer) == 0) {
-                grantInitialFlamePoints(serverPlayer);
+            // Очки выдаются только при АКТИВАЦИИ камня (переход "не надет -> надет"),
+            // а не автоматически при нулевом значении.
+            Boolean prev = STONE_WAS_EQUIPPED.get(serverPlayer.getUUID());
+            if (prev == null || !prev) {
+                STONE_WAS_EQUIPPED.put(serverPlayer.getUUID(), true);
+                grantActivationFlamePoints(serverPlayer);
             }
         } else {
-            if (Kots3Attachments.getFlamePoints(serverPlayer) > 0) {
+            if (STONE_WAS_EQUIPPED.remove(serverPlayer.getUUID()) != null
+                    && Kots3Attachments.getFlamePoints(serverPlayer) > 0) {
                 Kots3Attachments.setFlamePoints(serverPlayer, 0);
                 syncFlamePoints(serverPlayer);
             }
         }
     }
 
-    private void grantInitialFlamePoints(ServerPlayer player) {
-        if (Kots3Attachments.getFlamePoints(player) >= 3) return;
+    private static final Map<java.util.UUID, Boolean> STONE_WAS_EQUIPPED = new ConcurrentHashMap<>();
 
-        Kots3Attachments.setFlamePoints(player, 3);
+    /**
+     * Выдача 3 очков Пламени при активации (экипировке) огненного камня.
+     */
+    private void grantActivationFlamePoints(ServerPlayer player) {
+        Kots3Attachments.setFlamePoints(player, Math.min(3, Kots3Attachments.getFlamePoints(player) + 3));
         syncFlamePoints(player);
 
         player.displayClientMessage(Component.translatable("chat.kots.flame_points_granted", 3), true);
     }
 
-    // ==================== УРОН ПО ГОРЯЩЕМУ ВРАГУ ====================
+    // ==================== УРОН ПО ГОРЯЩЕМУ ВРАГУ / ОГНЕННЫЙ РЕЗОНАНС ====================
 
     @SubscribeEvent
-    public void onLivingDamage(LivingDamageEvent.Pre event) {
+    public void onLivingDamage(LivingDamageEvent.Post event) {
         LivingEntity target = event.getEntity();
         if (target.level().isClientSide) return;
 
-        LivingEntity attacker = getAttacker(event.getSource());
-        if (!(attacker instanceof ServerPlayer serverPlayer)) return;
+        DamageSource source = event.getSource();
 
-        // Проверить, есть ли на цели эффект BURN от Abloom
-        if (!target.hasEffect(AbloomModEffects.BURN)) return;
+        // 1) Фактический взрыв (в т.ч. огненного резонанса Abloom), причинённый игроком: +2 очка
+        if ((source.is(DamageTypes.EXPLOSION) || source.is(DamageTypes.PLAYER_EXPLOSION))
+                && source.getEntity() instanceof ServerPlayer attacker) {
+            tryGrantResonancePoints(attacker, target);
+        }
 
-        // Проверить cooldown
+        // 2) Очко за урон по горящему врагу, не чаще раза в 3 секунды на игрока
+        Entity attackerEntity = source.getEntity();
+        if (!(attackerEntity instanceof ServerPlayer serverPlayer)) return;
+
+        boolean fireWithBurn = isFireDamage(source) && target.hasEffect(AbloomModEffects.BURN);
+        if (fireWithBurn) {
+            // Это кандидат на огненный резонанс — начисляем резонансные очки (+2),
+            // обычное очко за урон при этом не дублируем.
+            tryGrantResonancePoints(serverPlayer, target);
+            return;
+        }
+
+        if (!isTargetBurning(target)) return;
+
         long currentTime = serverPlayer.level().getGameTime();
         if (!Kots3Attachments.canGainDamagePoint(serverPlayer, currentTime, DAMAGE_POINT_COOLDOWN_TICKS)) return;
 
-        // Начислить очко
         Kots3Attachments.addFlamePoints(serverPlayer, 1);
         Kots3Attachments.setLastDamagePointTime(serverPlayer, currentTime);
         syncFlamePoints(serverPlayer);
+    }
+
+    @SubscribeEvent
+    public void onLivingDeath(LivingDeathEvent event) {
+        // Очистка записей кулдаунов резонанса по умершей цели
+        if (event.getEntity().level().isClientSide) return;
+        java.util.UUID dead = event.getEntity().getUUID();
+        LAST_RESONANCE_TIME.keySet().removeIf(key -> key.endsWith(":" + dead));
+    }
+
+    private static boolean isFireDamage(DamageSource source) {
+        String msgId = source.type().msgId();
+        if (msgId != null && msgId.contains("fire")) return true;
+        return source.is(DamageTypes.IN_FIRE)
+                || source.is(DamageTypes.ON_FIRE)
+                || source.is(DamageTypes.LAVA)
+                || source.is(DamageTypes.HOT_FLOOR);
+    }
+
+    private static boolean isTargetBurning(LivingEntity target) {
+        return target.hasEffect(AbloomModEffects.BURN) || target.isOnFire();
     }
 
     // ==================== ПРОВЕРКА УРОВНЯ ПОДЖИГАТЕЛЯ ====================
@@ -186,16 +234,6 @@ public class FlameSkillHandler {
     }
 
     // ==================== ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ ====================
-
-    private LivingEntity getAttacker(DamageSource source) {
-        Entity entity = source.getEntity();
-        if (entity instanceof LivingEntity living) return living;
-
-        Entity direct = source.getDirectEntity();
-        if (direct instanceof LivingEntity living) return living;
-
-        return null;
-    }
 
     private boolean hasFireStoneEquipped(ServerPlayer player) {
         Optional<ICuriosItemHandler> curios = CuriosApi.getCuriosInventory(player);
