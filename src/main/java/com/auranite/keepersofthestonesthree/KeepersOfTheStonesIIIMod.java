@@ -1,7 +1,10 @@
 package com.auranite.keepersofthestonesthree;
 
+import com.auranite.keepersofthestonesthree.ability.FlameTongueAbility;
 import com.auranite.keepersofthestonesthree.effect.Kots3Effects;
+import com.auranite.keepersofthestonesthree.event.FlameSkillHandler;
 import com.auranite.keepersofthestonesthree.event.FireStoneCuriosHandler;
+import com.auranite.keepersofthestonesthree.init.Kots3Attachments;
 import com.auranite.keepersofthestonesthree.item.Kots3Items;
 import com.auranite.keepersofthestonesthree.item.Kots3Tabs;
 import net.neoforged.fml.ModContainer;
@@ -39,12 +42,15 @@ public class KeepersOfTheStonesIIIMod {
 
         NeoForge.EVENT_BUS.register(this);
         NeoForge.EVENT_BUS.register(new FireStoneCuriosHandler());
+        NeoForge.EVENT_BUS.register(new FlameSkillHandler());
+        NeoForge.EVENT_BUS.register(new FlameTongueAbility());
         modEventBus.addListener(this::registerNetworking);
 
         // Register mod items and tabs
         Kots3Items.REGISTRY.register(modEventBus);
         Kots3Tabs.REGISTRY.register(modEventBus);
         Kots3Effects.REGISTRY.register(modEventBus);
+        Kots3Attachments.register(modEventBus);
     }
 
 
@@ -65,6 +71,13 @@ public class KeepersOfTheStonesIIIMod {
     private void registerNetworking(final RegisterPayloadHandlersEvent event) {
         final PayloadRegistrar registrar = event.registrar(MODID);
         MESSAGES.forEach((id, networkMessage) -> registrar.playBidirectional(id, ((NetworkMessage) networkMessage).reader(), ((NetworkMessage) networkMessage).handler()));
+
+        // Register flame points sync packet
+        registrar.playBidirectional(
+                com.auranite.keepersofthestonesthree.network.FlamePointsSyncPacket.TYPE,
+                com.auranite.keepersofthestonesthree.network.FlamePointsSyncPacket.STREAM_CODEC,
+                com.auranite.keepersofthestonesthree.network.FlamePointsSyncPacket::handle
+        );
 
         networkingRegistered = true;
     }

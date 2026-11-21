@@ -61,5 +61,9 @@
   "item.kots.fire_armor_chestplate": "Огненный Нагрудник",
   "item.kots.fire_armor_leggings": "Огненные Поножи",
   "item.kots.fire_armor_boots": "Огненные Ботинки",
-  "item.kots.fire_sword": "Огненный Меч"
+  "item.kots.fire_sword": "Огненный Меч",
+
+  "effect.kots.igniter": "Поджигатель",
+  "ability.kots.flame_tongue_activated": "Язык Пламени активирован!",
+  "chat.kots.flame_points_granted": "Очки Пламени: +%s"
 }
